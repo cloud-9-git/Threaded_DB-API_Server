@@ -45,7 +45,8 @@ stop_server() {
 trap cleanup EXIT INT TERM
 
 cp "$ROOT_DIR"/db/*.schema "$TMP_DB"/
-cp "$ROOT_DIR"/db/*.data "$TMP_DB"/
+: >"$TMP_DB/users.data"
+: >"$TMP_DB/products.data"
 
 PORT=$(pick_free_port)
 start_server "$PORT" 4 64
@@ -216,13 +217,20 @@ time.sleep(0.3)
 try:
     deadline = time.time() + 3
     while True:
-        status, payload = request(
-            "POST",
-            "/query",
-            body=json.dumps({"sql": "SELECT * FROM users;"}),
-            headers={"Content-Type": "application/json"},
-            timeout=2,
-        )
+        try:
+            status, payload = request(
+                "POST",
+                "/query",
+                body=json.dumps({"sql": "SELECT * FROM users;"}),
+                headers={"Content-Type": "application/json"},
+                timeout=2,
+            )
+        except Exception:
+            if time.time() >= deadline:
+                raise
+            time.sleep(0.1)
+            continue
+
         if status == 503:
             assert payload["error_code"] == "QUEUE_FULL", payload
             break

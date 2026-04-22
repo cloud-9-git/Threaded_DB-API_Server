@@ -20,18 +20,24 @@ CLI_SRCS := \
 	src/cli.c
 
 SERVER_SRCS := \
-	src/server_main.c \
 	src/server.c \
 	src/http.c \
 	src/thread_pool.c \
 	src/task_queue.c \
 	src/db_api.c \
+	src/server_entry.c \
 	src/json_parser.c \
 	src/json_writer.c
+
+SERVER_MAIN_SRCS := \
+	src/server_main.c \
+	src/server_main_serial.c \
+	src/server_main_thread_per_req.c
 
 COMMON_OBJECTS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(COMMON_SRCS))
 CLI_OBJECTS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(CLI_SRCS))
 SERVER_OBJECTS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SERVER_SRCS))
+SERVER_MAIN_OBJECTS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SERVER_MAIN_SRCS))
 TEST_SOURCES := $(wildcard tests/test_*.c)
 TEST_BINS := $(patsubst tests/%.c,$(BUILD_DIR)/%,$(TEST_SOURCES))
 TEST_SHELLS := $(wildcard tests/test_*.sh)
@@ -40,7 +46,7 @@ TOOL_BINS := $(patsubst tools/%.c,$(BUILD_DIR)/%,$(TOOL_SOURCES))
 
 .PHONY: all test clean
 
-all: sql_processor mini_db_server $(TEST_BINS) $(TOOL_BINS)
+all: sql_processor mini_db_server mini_db_server_serial mini_db_server_thread_per_req $(TEST_BINS) $(TOOL_BINS)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -57,10 +63,16 @@ $(BUILD_DIR)/%: tools/%.c $(COMMON_OBJECTS) | $(BUILD_DIR)
 sql_processor: $(COMMON_OBJECTS) $(CLI_OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@
 
-mini_db_server: $(COMMON_OBJECTS) $(SERVER_OBJECTS)
+mini_db_server: $(COMMON_OBJECTS) $(SERVER_OBJECTS) $(BUILD_DIR)/server_main.o
 	$(CC) $(CFLAGS) $(PTHREAD_FLAGS) $^ -o $@
 
-test: $(TEST_BINS) sql_processor mini_db_server
+mini_db_server_serial: $(COMMON_OBJECTS) $(SERVER_OBJECTS) $(BUILD_DIR)/server_main_serial.o
+	$(CC) $(CFLAGS) $(PTHREAD_FLAGS) $^ -o $@
+
+mini_db_server_thread_per_req: $(COMMON_OBJECTS) $(SERVER_OBJECTS) $(BUILD_DIR)/server_main_thread_per_req.o
+	$(CC) $(CFLAGS) $(PTHREAD_FLAGS) $^ -o $@
+
+test: $(TEST_BINS) sql_processor mini_db_server mini_db_server_serial mini_db_server_thread_per_req
 	@for bin in $(TEST_BINS); do \
 		$$bin; \
 	done
@@ -69,4 +81,4 @@ test: $(TEST_BINS) sql_processor mini_db_server
 	done
 
 clean:
-	rm -rf $(BUILD_DIR) sql_processor mini_db_server
+	rm -rf $(BUILD_DIR) sql_processor mini_db_server mini_db_server_serial mini_db_server_thread_per_req
