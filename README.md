@@ -22,46 +22,6 @@ flowchart LR
     S9 --> S10["Step 10<br/>Concurrent INSERT"]
     S10 --> S11["Step 11<br/>마무리"]
 ```
-
----
-
-## 발표 전 준비
-
-터미널 1개와 Postman을 준비합니다.
-
-### 터미널: 서버 실행
-
-```bash
-make
-./mini_db_server -d db -p 8080 -t 4 -q 64
-```
-
-### Postman: 시연 요청 준비
-
-Postman에 `Mini DBMS API Server Demo` 컬렉션을 만들고 아래 요청을 미리 저장합니다.
-
-```text
-1. Health Check
-2. INSERT
-3. SELECT
-4. Multi Statement Error
-5. Concurrent SELECT
-6. Concurrent INSERT
-```
-
-```mermaid
-flowchart TB
-    Prep["발표 준비"]
-    Terminal["Terminal<br/>make<br/>mini_db_server 실행"]
-    Postman["Postman Collection<br/>6개 요청 저장"]
-    Demo["README를 따라 단계별 시연"]
-
-    Prep --> Terminal
-    Prep --> Postman
-    Terminal --> Demo
-    Postman --> Demo
-```
-
 ---
 
 ## Step 1. 프로젝트 소개
