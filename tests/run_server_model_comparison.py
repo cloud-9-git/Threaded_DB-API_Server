@@ -139,9 +139,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-bin", default=DEFAULT_SERVER_MODELS["serial"])
     parser.add_argument("--thread-pool-bin", default=DEFAULT_SERVER_MODELS["thread_pool"])
     parser.add_argument("--thread-per-request-bin", default=DEFAULT_SERVER_MODELS["thread_per_request"])
-    parser.add_argument("--summary-csv-out", default="reports/api_server_model_comparison_results.csv")
-    parser.add_argument("--raw-csv-out", default="reports/api_server_model_comparison_samples.csv")
-    parser.add_argument("--report-out", default="reports/api_server_model_comparison_report.md")
+    parser.add_argument("--summary-csv-out", default="reports/data/api_server_model_comparison_results.csv")
+    parser.add_argument("--raw-csv-out", default="reports/data/api_server_model_comparison_samples.csv")
+    parser.add_argument("--report-out", default="reports/details/api_server_model_comparison_report.md")
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
     parser.add_argument("--async-timeout-seconds", type=float, default=60.0)
     parser.add_argument("--scenario-ids", nargs="*", default=[])
@@ -1059,7 +1059,7 @@ def main() -> int:
         if not scenarios:
             raise SystemExit("no scenarios matched --scenario-ids")
     dataset_cache = {
-        dataset_rows: generate_dataset(root_dir / "reports" / "model_compare_datasets", dataset_rows)
+        dataset_rows: generate_dataset(root_dir / "reports" / "artifacts" / "model_compare_datasets", dataset_rows)
         for dataset_rows in sorted({scenario.dataset_rows for scenario in scenarios})
     }
 

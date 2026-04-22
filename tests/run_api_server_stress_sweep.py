@@ -39,9 +39,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workloads", nargs="+", default=DEFAULT_WORKLOADS)
     parser.add_argument("--concurrency-levels", nargs="+", type=int, default=DEFAULT_CONCURRENCY_LEVELS)
     parser.add_argument("--repeats", type=int, default=DEFAULT_REPEATS)
-    parser.add_argument("--csv-out", default="reports/api_server_stress_results.csv")
-    parser.add_argument("--raw-csv-out", default="reports/api_server_stress_samples.csv")
-    parser.add_argument("--report-out", default="reports/api_server_stress_report.md")
+    parser.add_argument("--csv-out", default="reports/data/api_server_stress_results.csv")
+    parser.add_argument("--raw-csv-out", default="reports/data/api_server_stress_samples.csv")
+    parser.add_argument("--report-out", default="reports/details/api_server_stress_report.md")
     return parser.parse_args()
 
 

@@ -60,9 +60,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--startup-retries", type=int, default=DEFAULT_STARTUP_RETRIES)
     parser.add_argument("--startup-retry-delay-seconds", type=float, default=DEFAULT_STARTUP_RETRY_DELAY_SECONDS)
     parser.add_argument("--cooldown-seconds", type=float, default=DEFAULT_COOLDOWN_SECONDS)
-    parser.add_argument("--csv-out", default="reports/api_server_async_stress_results.csv")
-    parser.add_argument("--raw-csv-out", default="reports/api_server_async_stress_samples.csv")
-    parser.add_argument("--report-out", default="reports/api_server_async_stress_report.md")
+    parser.add_argument("--csv-out", default="reports/data/api_server_async_stress_results.csv")
+    parser.add_argument("--raw-csv-out", default="reports/data/api_server_async_stress_samples.csv")
+    parser.add_argument("--report-out", default="reports/details/api_server_async_stress_report.md")
     return parser.parse_args()
 
 

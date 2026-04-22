@@ -3,6 +3,7 @@
 ## 처음 보는 분을 위한 안내
 
 - 이 문서는 여러 개별 리포트를 하나로 묶은 종합본입니다. 한 문서에서 `평상시 트래픽`, `짧은 순간의 몰림`, `수천 개 이상 동시 접속`을 함께 볼 수 있습니다.
+- `reports/` 최상단에는 꼭 봐야 하는 문서만 두고, 세부 리포트는 `reports/details/`, CSV 원본은 `reports/data/`로 정리했습니다.
 - 이 문서가 답하려는 질문은 간단합니다. `어떤 상황에서 worker thread 수와 queue 크기를 어떻게 잡는 것이 가장 무난한가?` 입니다.
 - 가장 먼저 볼 곳은 `시나리오별 추천 조합` 표입니다. 여기에는 상황별로 가장 적절하다고 판단한 설정만 추려져 있습니다.
 - `워커 수`는 동시에 실제 일을 처리하는 인원 수, `큐 크기`는 잠시 대기시켜 둘 수 있는 줄 길이라고 생각하면 됩니다.
@@ -70,9 +71,9 @@
   - 짧은 순간 몰림: `동시성 512 / 1024`, `mixed`, 데이터셋 `10k / 100k / 1M`, 큐 `32 / 64 / 128 / 256 / 512`, 조합당 `10회` 반복
   - 초고동시 접속: `동시성 2000 / 5000 / 10000 / 20000`, 데이터셋 `100k / 1M`, 큐 `512`, 조합당 `10회` 반복
 - 반복 측정 수: 초기 탐색 `177`개 조합 + 저워커 보강 `106`개 조합 = 요약표 기준 `283`개 조합, 개별 실행 기록 기준 `2830`회 실험
-- 통합 요약 CSV: `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_benchmark_results_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_stress_results_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_async_stress_results_matrix_all.csv`
-- 통합 개별 실행 CSV(`raw sample`): `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_benchmark_samples_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_stress_samples_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_async_stress_samples_matrix_all.csv`
-- 저워커 보강 요약 CSV: `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_benchmark_results_workers_1_2.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_stress_results_workers_1_2.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_async_stress_results_workers_1_2_q512.csv`
+- 통합 요약 CSV: `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_benchmark_results_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_stress_results_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_async_stress_results_matrix_all.csv`
+- 통합 개별 실행 CSV(`raw sample`): `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_benchmark_samples_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_stress_samples_matrix_all.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_async_stress_samples_matrix_all.csv`
+- 저워커 보강 요약 CSV: `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_benchmark_results_workers_1_2.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_stress_results_workers_1_2.csv`, `/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/data/api_server_async_stress_results_workers_1_2_q512.csv`
 
 ## 정합성 검증
 
@@ -95,7 +96,7 @@
 ## 처리 모델 비교 요약
 
 - worker/queue 조합 탐색과 별도로, `직렬 서버`, `스레드풀 서버`, `요청당 스레드 서버`를 같은 HTTP API와 같은 DB/lock 정책으로 직접 비교한 리포트도 만들었습니다.
-- 상세 문서: [api_server_model_comparison_report.md](/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/api_server_model_comparison_report.md)
+- 상세 문서: [api_server_model_comparison_report.md](/Users/hi/Library/CloudStorage/Dropbox/Mac/Desktop/Jungle/Threaded_DB-API_Server/reports/details/api_server_model_comparison_report.md)
 - 기본 비교(`100k`, 동시성 `1~128`)에서는 세 모델의 순수 처리량 차이가 생각보다 크지 않았고, 병렬이 항상 직렬보다 빠르지는 않았습니다.
 - `INSERT` 중심 workload에서는 write lock 영향이 커서 직렬이 자주 가장 빠르거나 가장 경제적이었습니다.
 - `mixed 128`, `burst 1024`처럼 읽기와 쓰기가 섞이거나 순간 부하가 커지면 스레드풀이 `p95`와 처리량 균형에서 더 나은 결과를 보였습니다.
