@@ -8,12 +8,22 @@ OUT_FILE="${OUT_FILE:-$ROOT_DIR/build/api_benchmark.csv}"
 RAW_OUT_FILE="${RAW_OUT_FILE:-$ROOT_DIR/build/api_benchmark_runs.csv}"
 SUMMARY_FILE="${SUMMARY_FILE:-$ROOT_DIR/build/api_benchmark_summary.txt}"
 REPORT_FILE="${REPORT_FILE:-$ROOT_DIR/build/api_benchmark_report.html}"
-TOTAL_REQUESTS="${TOTAL_REQUESTS:-2000}"
-REPEAT_RUNS="${REPEAT_RUNS:-3}"
-CONCURRENCY="${CONCURRENCY:-64}"
-WORKERS_LIST="${WORKERS_LIST:-1 2 4 8}"
-QUEUE_LIST="${QUEUE_LIST:-32 64 128}"
-WORKLOADS="${WORKLOADS:-select-only insert-only mixed}"
+SCALING_PROFILE="${SCALING_PROFILE:-0}"
+if [ "$SCALING_PROFILE" = "1" ]; then
+    TOTAL_REQUESTS="${TOTAL_REQUESTS:-5000}"
+    REPEAT_RUNS="${REPEAT_RUNS:-3}"
+    CONCURRENCY="${CONCURRENCY:-512}"
+    WORKERS_LIST="${WORKERS_LIST:-1 2 4 8}"
+    QUEUE_LIST="${QUEUE_LIST:-1024}"
+    WORKLOADS="${WORKLOADS:-health-only}"
+else
+    TOTAL_REQUESTS="${TOTAL_REQUESTS:-2000}"
+    REPEAT_RUNS="${REPEAT_RUNS:-3}"
+    CONCURRENCY="${CONCURRENCY:-64}"
+    WORKERS_LIST="${WORKERS_LIST:-1 2 4 8}"
+    QUEUE_LIST="${QUEUE_LIST:-32 64 128}"
+    WORKLOADS="${WORKLOADS:-select-only insert-only mixed}"
+fi
 BASE_PORT="${BASE_PORT:-19080}"
 
 mkdir -p "$(dirname "$OUT_FILE")"
@@ -49,9 +59,12 @@ def write_schema(db_dir):
 def request(port, sql):
     start = time.perf_counter()
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-    body = json.dumps({"sql": sql})
     try:
-        conn.request("POST", "/query", body=body, headers={"Content-Type": "application/json"})
+        if sql is None:
+            conn.request("GET", "/health")
+        else:
+            body = json.dumps({"sql": sql})
+            conn.request("POST", "/query", body=body, headers={"Content-Type": "application/json"})
         resp = conn.getresponse()
         resp.read()
         status = resp.status
@@ -77,6 +90,8 @@ def wait_ready(port):
     raise RuntimeError("server did not become ready")
 
 def sql_for(workload, index):
+    if workload == "health-only":
+        return None
     if workload == "select-only":
         return "SELECT * FROM users WHERE id = 1;"
     if workload == "insert-only":
@@ -203,6 +218,11 @@ def choose_best(aggregate):
             row["avg_ms_mean"],
             row["p95_ms_mean"],
         ))
+    ok_rows = [row for row in aggregate if row["rejected_requests_total"] == 0 and row["failure_requests_total"] == 0]
+    if ok_rows:
+        return min(ok_rows, key=lambda row: (row["avg_ms_mean"], row["p95_ms_mean"], row["workers"], row["queue_size"]))
+    if aggregate:
+        return min(aggregate, key=lambda row: (row["rejected_rate_pct"], row["failure_requests_total"], row["avg_ms_mean"]))
     return None
 
 def write_csv(path, rows, fields):
@@ -212,8 +232,10 @@ def write_csv(path, rows, fields):
         writer.writerows(rows)
 
 def write_summary(path, aggregate, best):
-    mixed_rows = [row for row in aggregate if row["workload"] == "mixed"]
-    mixed_rows.sort(key=lambda row: (row["status"] != "OK", row["avg_ms_mean"], row["p95_ms_mean"]))
+    ranked_rows = [row for row in aggregate if row["workload"] == "mixed"]
+    if not ranked_rows:
+        ranked_rows = list(aggregate)
+    ranked_rows.sort(key=lambda row: (row["status"] != "OK", row["avg_ms_mean"], row["p95_ms_mean"]))
 
     with open(path, "w", encoding="utf-8") as f:
         f.write("Mini DB API Benchmark Summary\n")
@@ -222,8 +244,9 @@ def write_summary(path, aggregate, best):
         f.write("status_rule=OK means no 503 and no failures across all repeated runs\n\n")
         if best:
             f.write(
-                "BEST_MIXED workers=%s queue_size=%s avg_ms_mean=%.2f p95_ms_mean=%.2f p95_ms_max=%.2f status=%s\n\n"
+                "BEST workload=%s workers=%s queue_size=%s avg_ms_mean=%.2f p95_ms_mean=%.2f p95_ms_max=%.2f status=%s\n\n"
                 % (
+                    best["workload"],
                     best["workers"],
                     best["queue_size"],
                     best["avg_ms_mean"],
@@ -232,14 +255,15 @@ def write_summary(path, aggregate, best):
                     best["status"],
                 )
             )
-        f.write("Mixed workload ranking by speed\n")
-        f.write("workers queue success_rate rejected_rate avg_ms p95_mean p95_max status\n")
-        for row in mixed_rows:
+        f.write("Ranking by speed\n")
+        f.write("workers queue workload success_rate rejected_rate avg_ms p95_mean p95_max status\n")
+        for row in ranked_rows:
             f.write(
-                "%7s %5s %11.2f %13.2f %6.2f %8.2f %7.2f %s\n"
+                "%7s %5s %-11s %11.2f %13.2f %6.2f %8.2f %7.2f %s\n"
                 % (
                     row["workers"],
                     row["queue_size"],
+                    row["workload"],
                     row["success_rate_pct"],
                     row["rejected_rate_pct"],
                     row["avg_ms_mean"],
@@ -277,9 +301,10 @@ def write_report(path, aggregate, best):
             )
         )
 
-    best_text = "No mixed workload result"
+    best_text = "No benchmark result"
     if best:
-        best_text = "workers=%s, queue=%s, avg=%.2fms, p95=%.2fms, status=%s" % (
+        best_text = "workload=%s, workers=%s, queue=%s, avg=%.2fms, p95=%.2fms, status=%s" % (
+            best["workload"],
             best["workers"],
             best["queue_size"],
             best["avg_ms_mean"],
@@ -309,7 +334,7 @@ tr.bad { background: #ffe0e0; }
 <body>
 <h1>Mini DB API Benchmark Report</h1>
 <div class="meta">requests_per_run=%d, repeat_runs=%d, concurrency=%d, sorted_by=avg_ms_mean ascending</div>
-<div class="best-box"><strong>Best mixed:</strong> %s</div>
+<div class="best-box"><strong>Best:</strong> %s</div>
 <table>
 <thead>
 <tr><th>workers</th><th>queue</th><th>workload</th><th>runs</th><th>success</th><th>rejected</th><th>avg ms</th><th>p95 mean</th><th>p95 max</th><th>status</th></tr>
@@ -393,10 +418,11 @@ write_report(report_file, summary_rows, best)
 
 if best:
     print(
-        "recommended_default workers=%s queue_size=%s workload=mixed avg_ms_mean=%s p95_ms_mean=%s p95_ms_max=%s status=%s"
+        "recommended_default workers=%s queue_size=%s workload=%s avg_ms_mean=%s p95_ms_mean=%s p95_ms_max=%s status=%s"
         % (
             best["workers"],
             best["queue_size"],
+            best["workload"],
             best["avg_ms_mean"],
             best["p95_ms_mean"],
             best["p95_ms_max"],

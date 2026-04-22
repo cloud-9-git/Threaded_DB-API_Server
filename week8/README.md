@@ -129,3 +129,12 @@ TOTAL_REQUESTS=2000 REPEAT_RUNS=3 CONCURRENCY=64 tests/bench_api_server.sh
 ```sh
 cat build/api_benchmark_summary.txt
 ```
+
+worker 수만 바꿔서 싱글 worker와 2/4/8 worker 처리 속도를 비교하려면:
+
+```sh
+SCALING_PROFILE=1 tests/bench_api_server.sh
+open build/api_benchmark_report.html
+```
+
+이 프로필은 queue/workload를 고정하고 `workers=1 2 4 8`만 바꿔서, 동시 요청이 많이 들어올 때 worker 수가 처리 속도에 주는 영향을 HTML에서 속도순으로 보여준다.
