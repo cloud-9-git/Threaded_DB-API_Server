@@ -1,73 +1,206 @@
-# B+Tree SQL Engine
+# Threaded DB API Server
 
-## 전체 구조
+기존 C 기반 SQL 엔진을 유지한 채, 그 앞에 최소 HTTP/JSON 서버를 얹은 프로젝트다.
 
-![B+Tree SQL Engine 단순 구조도](docs/architecture_no_runtime.svg)
+현재 레포는 두 실행 파일을 제공한다.
 
-## B+Tree의 장점
+- `sql_processor`: 파일 기반 CLI SQL 실행기
+- `mini_db_server`: thread pool + bounded queue 기반 HTTP API 서버
 
-### 1. 검색 성능이 안정적이다
+지원 SQL 범위는 현재 엔진 기준으로 `SELECT`, `INSERT`다. API 서버는 요청당 SQL 1문장만 허용한다.
 
-![alt text](image.png)
-B+Tree는 전체 데이터를 처음부터 끝까지 확인하지 않고, 트리 구조를 따라 내려가며 key를 찾습니다.
+## Build
 
-```text
-전체 스캔: O(N)
-B+Tree 검색: O(log N)
+```bash
+make
 ```
 
-B+Tree는 전체 데이터를 처음부터 끝까지 훑지 않고, root부터 leaf까지 트리 경로를 따라 key를 찾습니다.
-그래서 데이터가 많아져도 검색 비용이 O(log N) 수준으로 유지됩니다.
-특히 WHERE id = ? 같은 조건에서 선형 탐색보다 안정적인 조회 성능을 냅니다.
+빌드 결과:
 
-### 2. 정렬된 key를 유지한다
+- `./sql_processor`
+- `./mini_db_server`
+- `build/test_*`
+- `build/benchmark_bptree`
 
-![alt text](image-1.png)
+## Test
 
-B+Tree는 key를 항상 정렬된 상태로 저장합니다.
-그래서 특정 key 검색뿐 아니라 범위 검색이나 정렬된 조회에도 유리합니다.
-예를 들어 BETWEEN같은 작업에 활용하기 좋습니다.
-Hash Table은 단일 key 조회에는 빠를 수 있지만, key의 정렬 순서를 유지하지 않기 때문에 범위 검색이나 정렬에는 약합니다.
+기존 엔진 테스트와 API 서버 테스트를 함께 실행한다.
+
+```bash
+make test
+```
+
+추가 확인용 기본 수용 기준:
+
+```bash
+./sql_processor -d db -f queries/multi_statements.sql
+```
+
+## CLI Engine
+
+SQL 파일을 읽어 기존 엔진으로 실행한다.
+
+```bash
+./sql_processor -d db -f queries/multi_statements.sql
+```
+
+예시 SQL:
 
 ```sql
-SELECT * FROM users WHERE id BETWEEN 10 AND 100;
-SELECT * FROM users ORDER BY id;
+INSERT INTO users VALUES ('Alice', 20);
+SELECT * FROM users WHERE id = 1;
 ```
 
-## B+Tree의 한계
+## API Server
 
-### 1. 인덱스 유지 비용이 있다
+서버 실행:
 
-![alt text](image-3.png)
+```bash
+./mini_db_server -d db -p 8080 -t 4 -q 64
+```
 
-B+Tree 인덱스는 조회를 빠르게 해주지만, INSERT 때마다 원본 데이터 저장 외에 인덱스에도 id -> row_offset을 추가해야 합니다.
-즉 읽기 성능을 얻는 대신, 쓰기 시 인덱스를 유지하는 추가 비용을 감수하는 구조입니다.
+지원 옵션:
 
-### 2. 노드 split 비용이 있다
+| 옵션 | 의미 | 기본값 |
+| --- | --- | --- |
+| `-d`, `--db` | DB 디렉터리 | 필수 |
+| `-p`, `--port` | 포트 | `8080` |
+| `-t`, `--threads` | worker 수 | `4` |
+| `-q`, `--queue-size` | queue capacity | `64` |
+| `-h`, `--help` | 도움말 | 없음 |
 
-B+Tree 노드가 가득 차면 split이 발생합니다.
+### Health Check
+
+```bash
+curl -s http://127.0.0.1:8080/health | jq
+```
+
+응답:
+
+```json
+{
+  "success": true,
+  "service": "mini_db_server"
+}
+```
+
+### Query API
+
+INSERT:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/query \
+  -H "Content-Type: application/json" \
+  --data '{"sql":"INSERT INTO users VALUES ('\''Alice'\'', 20);"}' | jq
+```
+
+SELECT:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/query \
+  -H "Content-Type: application/json" \
+  --data '{"sql":"SELECT * FROM users WHERE id = 1;"}' | jq
+```
+
+SELECT 성공 응답 예:
+
+```json
+{
+  "success": true,
+  "type": "select",
+  "used_index": true,
+  "row_count": 1,
+  "columns": ["id", "name", "age"],
+  "rows": [["1", "Alice", "20"]]
+}
+```
+
+INSERT 성공 응답 예:
+
+```json
+{
+  "success": true,
+  "type": "insert",
+  "affected_rows": 1,
+  "generated_id": 1
+}
+```
+
+에러 응답 예:
+
+```json
+{
+  "success": false,
+  "error_code": "MULTI_STATEMENT_NOT_ALLOWED",
+  "message": "only one SQL statement is allowed"
+}
+```
+
+## API Rules
+
+- `GET /health`
+- `POST /query`
+- JSON body의 top-level `sql` 문자열만 읽는다
+- 요청당 SQL 1문장만 허용한다
+- `SELECT`는 preload 후 read lock으로 실행한다
+- `INSERT`는 write lock으로 실행한다
+- queue가 가득 차면 `503`과 `QUEUE_FULL`을 반환한다
+
+## Error Codes
+
+주요 응답 코드:
+
+- `INVALID_JSON`
+- `MISSING_SQL_FIELD`
+- `EMPTY_QUERY`
+- `MULTI_STATEMENT_NOT_ALLOWED`
+- `UNSUPPORTED_QUERY`
+- `SQL_PARSE_ERROR`
+- `SCHEMA_ERROR`
+- `STORAGE_ERROR`
+- `INDEX_ERROR`
+- `EXECUTION_ERROR`
+- `QUEUE_FULL`
+- `BAD_REQUEST`
+- `NOT_FOUND`
+- `METHOD_NOT_ALLOWED`
+- `PAYLOAD_TOO_LARGE`
+- `INTERNAL_ERROR`
+
+## Benchmark
+
+API 서버용 benchmark 스크립트는 수동 실행용이다.
+
+```bash
+sh tests/bench_api_server.sh
+```
+
+기본 측정 조합:
+
+- workers: `2`, `4`, `8`
+- queue size: `32`, `64`, `128`
+- workload: `select-only`, `insert-only`, `mixed`
+
+결과 파일:
 
 ```text
-leaf node split
-internal node split
-parent key 갱신
-root 변경 가능
+build/bench_api_server_results.tsv
 ```
 
-B+Tree 노드가 가득 찬 상태에서 새 key를 넣으면 split이 발생합니다.
-이때 key를 나누고, 새 노드를 만들고, 부모 노드에 separator key를 올려야 합니다.
-따라서 대량 INSERT 상황에서는 split 비용이 누적될 수 있습니다.
-
-### 3. 추가 메모리나 디스크 공간이 필요하다
-![alt text](image-4.png)
-
-B+Tree 인덱스는 원본 데이터와 별도로 key와 row 위치 정보를 저장합니다.
-그래서 데이터 파일 외에 인덱스 노드, key 배열, child pointer 또는 row_offset 공간이 추가로 필요합니다.
-조회 성능을 얻는 대신 저장 공간을 더 사용하는 구조입니다.
+컬럼:
 
 ```text
-원본 데이터
-+ B+Tree 노드
-+ key 배열
-+ child pointer 또는 row_offset
+workers	queue_size	workload	total_requests	success_requests	rejected_requests	total_ms	avg_ms	p95_ms
 ```
+
+필요하면 환경 변수로 요청 수와 seed row 수를 조절할 수 있다.
+
+```bash
+REQUESTS_PER_RUN=120 SEED_ROWS=5000 sh tests/bench_api_server.sh
+```
+
+## Notes
+
+- 기존 `sql_processor` 동작은 계속 유지된다.
+- API 서버는 full HTTP/1.1, chunked body, SQL batch, `UPDATE`, `DELETE`, `JOIN`, transaction을 구현하지 않는다.
+- 테스트와 benchmark 스크립트는 `curl`, `jq`, `python3`, `xargs`가 있는 환경을 전제로 한다.
