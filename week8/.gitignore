@@ -1,0 +1,4 @@
+build/
+sql_processor
+mini_db_server
+*.o
