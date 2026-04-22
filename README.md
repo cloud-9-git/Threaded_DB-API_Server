@@ -1,73 +1,171 @@
-# B+Tree SQL Engine
+# Threaded DB API Server
 
-## 전체 구조
+C 언어로 구현한 미니 DBMS API 서버입니다.
 
-![B+Tree SQL Engine 단순 구조도](docs/architecture_no_runtime.svg)
-
-## B+Tree의 장점
-
-### 1. 검색 성능이 안정적이다
-
-![alt text](image.png)
-B+Tree는 전체 데이터를 처음부터 끝까지 확인하지 않고, 트리 구조를 따라 내려가며 key를 찾습니다.
+외부 클라이언트는 HTTP/JSON으로 SQL을 보내고, 서버는 작업 큐와 thread pool을 거쳐 books 미니 DB를 실행한 뒤 JSON으로 결과를 돌려줍니다.
 
 ```text
-전체 스캔: O(N)
-B+Tree 검색: O(log N)
+client(http/js)
+-> server
+-> queue
+-> thread pool
+-> SQL + B+ tree mini DB
+-> server
+-> client
 ```
 
-B+Tree는 전체 데이터를 처음부터 끝까지 훑지 않고, root부터 leaf까지 트리 경로를 따라 key를 찾습니다.
-그래서 데이터가 많아져도 검색 비용이 O(log N) 수준으로 유지됩니다.
-특히 WHERE id = ? 같은 조건에서 선형 탐색보다 안정적인 조회 성능을 냅니다.
+## 구현 범위
 
-### 2. 정렬된 key를 유지한다
+- POSIX socket 기반 HTTP 서버
+- JSON 요청/응답
+- 고정 크기 ring buffer 작업 큐
+- pthread 기반 worker thread pool
+- 기존 `src/bptree.c` B+Tree를 id 인덱스로 재사용
+- `db_exec()` wrapper
+- books 테이블 전용 SQL
+- READ / WRITE / MIXED 벤치마크
+- worker 수별 benchmark runner
+- Canvas 기반 chart
+- 단위 테스트, API 테스트, 엣지 케이스 테스트
+- GitHub Actions CI
 
-![alt text](image-1.png)
-
-B+Tree는 key를 항상 정렬된 상태로 저장합니다.
-그래서 특정 key 검색뿐 아니라 범위 검색이나 정렬된 조회에도 유리합니다.
-예를 들어 BETWEEN같은 작업에 활용하기 좋습니다.
-Hash Table은 단일 key 조회에는 빠를 수 있지만, key의 정렬 순서를 유지하지 않기 때문에 범위 검색이나 정렬에는 약합니다.
+## 지원 SQL
 
 ```sql
-SELECT * FROM users WHERE id BETWEEN 10 AND 100;
-SELECT * FROM users ORDER BY id;
+CREATE TABLE books;
+INSERT INTO books VALUES (1, 'title', 'author', 2024);
+SELECT * FROM books WHERE id = 1;
+SELECT * FROM books;
+DELETE FROM books WHERE id = 1;
 ```
 
-## B+Tree의 한계
+`title`, `author`에는 공백이 들어갈 수 있습니다.
 
-### 1. 인덱스 유지 비용이 있다
+## 빌드
 
-![alt text](image-3.png)
+```bash
+make
+```
 
-B+Tree 인덱스는 조회를 빠르게 해주지만, INSERT 때마다 원본 데이터 저장 외에 인덱스에도 id -> row_offset을 추가해야 합니다.
-즉 읽기 성능을 얻는 대신, 쓰기 시 인덱스를 유지하는 추가 비용을 감수하는 구조입니다.
+생성 바이너리:
 
-### 2. 노드 split 비용이 있다
+- `server`: HTTP/JSON DB API 서버
+- `sql_processor`: 기존 CLI SQL 처리기
 
-B+Tree 노드가 가득 차면 split이 발생합니다.
+## 실행
+
+```bash
+make run WORKERS=8 PORT=8080
+```
+
+직접 실행:
+
+```bash
+./server --port 8080 --workers 8
+```
+
+worker 기본값은 CPU core 수의 2배입니다.
+
+## API
+
+Health:
+
+```bash
+curl http://127.0.0.1:8080/health
+```
+
+SQL:
+
+```bash
+curl -X POST http://127.0.0.1:8080/sql \
+  -H 'Content-Type: application/json' \
+  -d '{"sql":"INSERT INTO books VALUES (1, '\''C Book'\'', '\''Kim'\'', 2024);"}'
+```
+
+Stats:
+
+```bash
+curl http://127.0.0.1:8080/stats
+```
+
+Bench endpoint:
+
+```bash
+curl -X POST http://127.0.0.1:8080/bench \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"write","count":1000}'
+```
+
+Chart:
 
 ```text
-leaf node split
-internal node split
-parent key 갱신
-root 변경 가능
+http://127.0.0.1:8080/chart
 ```
 
-B+Tree 노드가 가득 찬 상태에서 새 key를 넣으면 split이 발생합니다.
-이때 key를 나누고, 새 노드를 만들고, 부모 노드에 separator key를 올려야 합니다.
-따라서 대량 INSERT 상황에서는 split 비용이 누적될 수 있습니다.
+## 테스트
 
-### 3. 추가 메모리나 디스크 공간이 필요하다
-![alt text](image-4.png)
-
-B+Tree 인덱스는 원본 데이터와 별도로 key와 row 위치 정보를 저장합니다.
-그래서 데이터 파일 외에 인덱스 노드, key 배열, child pointer 또는 row_offset 공간이 추가로 필요합니다.
-조회 성능을 얻는 대신 저장 공간을 더 사용하는 구조입니다.
-
-```text
-원본 데이터
-+ B+Tree 노드
-+ key 배열
-+ child pointer 또는 row_offset
+```bash
+make test
+make api-test
 ```
+
+검증 항목:
+
+- B+Tree insert/search/duplicate
+- Queue push/pop/full/empty
+- SQL create/insert/select/delete
+- 빈 SQL, 긴 SQL, 잘못된 SQL
+- 없는 id 검색
+- 중복 id INSERT
+- DELETE 없는 id
+- title/author 공백 포함
+- worker 1개 API 처리
+- 동시 SELECT 100개 이상
+- bad JSON, bad SQL
+
+## 벤치마크
+
+과제용 대규모 실행:
+
+```bash
+make bench COUNT=1000000
+```
+
+빠른 확인:
+
+```bash
+make bench COUNT=10000
+```
+
+직접 옵션:
+
+```bash
+node bench/bench.js --workers 1,2,4,8,16,32 --count 1000000 --conc 128
+```
+
+결과:
+
+- `bench/result.json`
+- `bench/chart.html`
+
+## 구조
+
+주요 파일:
+
+- `src/server_main.c`: 서버 실행 옵션과 초기화
+- `src/http.c`: HTTP 파싱, JSON 추출, 라우팅
+- `src/queue.c`: 고정 크기 작업 큐
+- `src/pool.c`: worker thread pool
+- `src/db_api.c`: books SQL wrapper와 B+Tree 인덱스 연결
+- `src/bptree.c`: 기존 B+Tree 구현
+- `bench/bench.js`: worker별 benchmark
+- `bench/chart.html`: 결과 차트
+
+## 한계점
+
+- 완전한 SQL 엔진이 아니라 과제에 필요한 books SQL 부분집합만 지원합니다.
+- HTTP 요청은 한 연결당 한 요청만 처리합니다.
+- chunked request는 지원하지 않습니다.
+- DB는 서버 프로세스 메모리에 저장됩니다.
+- `SELECT * FROM books;` 응답이 너무 커지면 JSON을 안전하게 줄이고 `truncated:true`를 표시합니다.
+- 기존 B+Tree에 delete 함수가 없어 DELETE 시 살아있는 row 기준으로 인덱스를 재빌드합니다.

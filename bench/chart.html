@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Threaded DB Benchmark</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+      background: #f7f8fb;
+      color: #222;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 18px;
+      font-size: 28px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+    }
+    .panel {
+      background: #fff;
+      border: 1px solid #d9dde7;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    canvas {
+      width: 100%;
+      height: 300px;
+      display: block;
+    }
+    #msg {
+      margin-bottom: 16px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>Threaded DB Benchmark</h1>
+  <div id="msg">Loading bench/result.json</div>
+  <div class="grid">
+    <div class="panel"><canvas id="total" width="720" height="360"></canvas></div>
+    <div class="panel"><canvas id="wait" width="720" height="360"></canvas></div>
+    <div class="panel"><canvas id="work" width="720" height="360"></canvas></div>
+    <div class="panel"><canvas id="qps" width="720" height="360"></canvas></div>
+  </div>
+  <script>
+    const colors = { write: '#2266aa', read: '#2e8b57', mixed: '#b65f26' };
+
+    function draw(canvas, rows, key, title) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const pad = 48;
+      const modes = [...new Set(rows.map((r) => r.mode))];
+      const workers = [...new Set(rows.map((r) => r.workers))].sort((a, b) => a - b);
+      const max = Math.max(1, ...rows.map((r) => Number(r[key]) || 0));
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#222';
+      ctx.font = '18px Arial';
+      ctx.fillText(title, pad, 28);
+
+      ctx.strokeStyle = '#c7ccd8';
+      ctx.beginPath();
+      ctx.moveTo(pad, h - pad);
+      ctx.lineTo(w - 18, h - pad);
+      ctx.moveTo(pad, 42);
+      ctx.lineTo(pad, h - pad);
+      ctx.stroke();
+
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#666';
+      ctx.fillText(max.toFixed(1), 8, 50);
+      ctx.fillText('0', 24, h - pad + 4);
+
+      modes.forEach((mode) => {
+        ctx.strokeStyle = colors[mode] || '#444';
+        ctx.fillStyle = colors[mode] || '#444';
+        ctx.beginPath();
+        workers.forEach((worker, idx) => {
+          const row = rows.find((r) => r.mode === mode && r.workers === worker);
+          const val = row ? Number(row[key]) || 0 : 0;
+          const x = pad + (workers.length === 1 ? 0 : idx * ((w - pad - 28) / (workers.length - 1)));
+          const y = h - pad - (val / max) * (h - pad - 52);
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+          ctx.fillRect(x - 3, y - 3, 6, 6);
+        });
+        ctx.stroke();
+      });
+
+      ctx.fillStyle = '#333';
+      workers.forEach((worker, idx) => {
+        const x = pad + (workers.length === 1 ? 0 : idx * ((w - pad - 28) / (workers.length - 1)));
+        ctx.fillText(String(worker), x - 4, h - 18);
+      });
+
+      modes.forEach((mode, idx) => {
+        ctx.fillStyle = colors[mode] || '#444';
+        ctx.fillRect(w - 122, 18 + idx * 18, 10, 10);
+        ctx.fillText(mode, w - 106, 28 + idx * 18);
+      });
+    }
+
+    fetch('result.json')
+      .then((res) => {
+        if (!res.ok) throw new Error('result.json not found');
+        return res.json();
+      })
+      .then((rows) => {
+        document.getElementById('msg').textContent = `${rows.length} benchmark rows loaded`;
+        draw(document.getElementById('total'), rows, 'total_ms', 'worker count vs total time (ms)');
+        draw(document.getElementById('wait'), rows, 'avg_wait_ms', 'worker count vs avg wait (ms)');
+        draw(document.getElementById('work'), rows, 'avg_work_ms', 'worker count vs avg work (ms)');
+        draw(document.getElementById('qps'), rows, 'qps', 'worker count vs QPS');
+      })
+      .catch((err) => {
+        document.getElementById('msg').textContent = err.message;
+      });
+  </script>
+</body>
+</html>

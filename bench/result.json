@@ -1,0 +1,62 @@
+[
+  {
+    "workers": 1,
+    "mode": "write",
+    "count": 30,
+    "conc": 4,
+    "total_ms": 20,
+    "avg_wait_ms": 0.04959999999999997,
+    "avg_work_ms": 0.003533333333333335,
+    "qps": 1500
+  },
+  {
+    "workers": 1,
+    "mode": "read",
+    "count": 30,
+    "conc": 4,
+    "total_ms": 14,
+    "avg_wait_ms": 0.013233333333333338,
+    "avg_work_ms": 0.0048333333333333344,
+    "qps": 2142.8571428571427
+  },
+  {
+    "workers": 1,
+    "mode": "mixed",
+    "count": 30,
+    "conc": 4,
+    "total_ms": 10,
+    "avg_wait_ms": 0.04209999999999998,
+    "avg_work_ms": 0.005266666666666669,
+    "qps": 3000
+  },
+  {
+    "workers": 2,
+    "mode": "write",
+    "count": 30,
+    "conc": 4,
+    "total_ms": 11,
+    "avg_wait_ms": 0.027566666666666684,
+    "avg_work_ms": 0.009500000000000001,
+    "qps": 2727.2727272727275
+  },
+  {
+    "workers": 2,
+    "mode": "read",
+    "count": 30,
+    "conc": 4,
+    "total_ms": 8,
+    "avg_wait_ms": 0.022133333333333338,
+    "avg_work_ms": 0.004066666666666668,
+    "qps": 3750
+  },
+  {
+    "workers": 2,
+    "mode": "mixed",
+    "count": 30,
+    "conc": 4,
+    "total_ms": 7,
+    "avg_wait_ms": 0.01843333333333334,
+    "avg_work_ms": 0.007566666666666669,
+    "qps": 4285.714285714285
+  }
+]
