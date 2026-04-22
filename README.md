@@ -767,6 +767,7 @@ flowchart LR
 ### 3. 반례
 
 그런데 첫 결과는 예상과 달랐습니다. worker를 늘려도 항상 더 빨라지지 않았고, 어떤 케이스에서는 오히려 worker가 적은 쪽이 더 빨랐습니다. 즉, `멀티스레딩 = 무조건 속도 향상`이라는 가설이 바로 깨졌습니다.
+<img width="629" height="383" alt="Screenshot 2026-04-22 at 23 35 19" src="https://github.com/user-attachments/assets/179cf5bd-6dc1-432e-81f9-37f02d2bab73" />
 
 ### 4. 왜 이런 결과가 나왔는가
 
