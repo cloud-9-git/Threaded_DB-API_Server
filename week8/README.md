@@ -99,18 +99,30 @@ tests/bench_api_server.sh
 
 기본 조합:
 
+- requests per run: `2000`
+- repeat runs: `3`
+- concurrency: `64`
 - workers: `2 4 8`
 - queue size: `32 64 128`
 - workload: `select-only insert-only mixed`
 
-결과 CSV:
+결과 파일:
 
 ```text
-build/api_benchmark.csv
+build/api_benchmark.csv          # 3회 반복 평균 요약 CSV
+build/api_benchmark_runs.csv     # 각 run별 raw CSV
+build/api_benchmark_summary.txt  # 한눈 요약 텍스트
+build/api_benchmark_report.html  # 한눈 HTML 리포트
 ```
 
 환경변수로 빠르게 조정할 수 있습니다.
 
 ```sh
-TOTAL_REQUESTS=1000 CONCURRENCY=64 tests/bench_api_server.sh
+TOTAL_REQUESTS=2000 REPEAT_RUNS=3 CONCURRENCY=64 tests/bench_api_server.sh
+```
+
+추천 조합만 빨리 보려면:
+
+```sh
+cat build/api_benchmark_summary.txt
 ```

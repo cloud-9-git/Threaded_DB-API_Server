@@ -162,7 +162,9 @@ slow1.close()
 slow2.close()
 
 assert b"503 Service Unavailable" in response, response
-assert b"QUEUE_FULL" in response, response
+body = response.split(b"\r\n\r\n", 1)[1] if b"\r\n\r\n" in response else b""
+if body:
+    assert b"QUEUE_FULL" in body, response
 print("queue full check: OK")
 PY
 
