@@ -240,7 +240,7 @@ def write_summary(path, aggregate, best):
     with open(path, "w", encoding="utf-8") as f:
         f.write("Mini DB API Benchmark Summary\n")
         f.write("requests_per_run=%d repeat_runs=%d concurrency=%d\n" % (total_requests, repeat_runs, concurrency))
-        f.write("sort_rule=lower avg_ms_mean is faster\n")
+        f.write("sort_rule=workload first, then lower avg_ms_mean is faster\n")
         f.write("status_rule=OK means no 503 and no failures across all repeated runs\n\n")
         if best:
             f.write(
@@ -255,7 +255,7 @@ def write_summary(path, aggregate, best):
                     best["status"],
                 )
             )
-        f.write("Ranking by speed\n")
+        f.write("Ranking by workload and speed\n")
         f.write("workers queue workload success_rate rejected_rate avg_ms p95_mean p95_max status\n")
         for row in ranked_rows:
             f.write(
@@ -278,7 +278,7 @@ def write_summary(path, aggregate, best):
         f.write("html_report=%s\n" % report_file)
 
 def write_report(path, aggregate, best):
-    rows = sorted(aggregate, key=lambda row: (row["avg_ms_mean"], row["p95_ms_mean"], row["workers"], row["queue_size"], row["workload"]))
+    rows = sorted(aggregate, key=lambda row: (row["workload"], row["avg_ms_mean"], row["p95_ms_mean"], row["workers"], row["queue_size"]))
     best_key = group_key(best) if best else None
     html_rows = []
 
@@ -333,7 +333,7 @@ tr.bad { background: #ffe0e0; }
 </head>
 <body>
 <h1>Mini DB API Benchmark Report</h1>
-<div class="meta">requests_per_run=%d, repeat_runs=%d, concurrency=%d, sorted_by=avg_ms_mean ascending</div>
+<div class="meta">requests_per_run=%d, repeat_runs=%d, concurrency=%d, sorted_by=workload then avg_ms_mean ascending</div>
 <div class="best-box"><strong>Best:</strong> %s</div>
 <table>
 <thead>
